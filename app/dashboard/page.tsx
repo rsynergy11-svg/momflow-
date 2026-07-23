@@ -1,9 +1,30 @@
 import Link from "next/link";
-import { requireHousehold, getStaff, getMemoryRules, getTodayBrief, getBriefStats, isTrialExpired } from "@/lib/data";
+import { requireHousehold, getStaff, getMemoryRules, getTodayBrief, getBriefStats, isTrialExpired, getLatestMealPlan } from "@/lib/data";
 import { getFestivalContext, getUpcomingFestival } from "@/lib/festivals";
 import BottomNav from "@/components/BottomNav";
 import StaffStatusCard from "@/components/StaffStatusCard";
 import MealEditRow from "@/components/MealEditRow";
+import type { MealsForDay, WeeklyPlan } from "@/lib/types";
+
+const WEEKDAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+
+// If mom already generated this week's AI meal plan, today's dashboard should show
+// those meals by default instead of blank "Tap to add" fields — she shouldn't have
+// to re-type what she already planned. Only used when no brief exists yet for today
+// (once she's edited/confirmed today's meals via a brief, that takes precedence).
+function todaysMealsFromWeeklyPlan(
+  plan: { week_start: string; plan: WeeklyPlan } | null,
+  today: Date
+): MealsForDay | null {
+  if (!plan) return null;
+  const weekStart = new Date(plan.week_start + "T00:00:00");
+  const daysSinceStart = Math.floor((today.getTime() - weekStart.getTime()) / 86400000);
+  if (daysSinceStart < 0 || daysSinceStart > 6) return null; // plan doesn't cover today
+  const dayDate = new Date(weekStart);
+  dayDate.setDate(dayDate.getDate() + daysSinceStart);
+  const key = WEEKDAY_KEYS[dayDate.getDay()];
+  return plan.plan?.[key] || null;
+}
 
 function greeting() {
   const hour = new Date().getHours();
@@ -14,12 +35,18 @@ function greeting() {
 
 export default async function DashboardPage() {
   const { household } = await requireHousehold();
-  const [staff, rules, brief, stats] = await Promise.all([
+  const [staff, rules, brief, stats, weeklyPlan] = await Promise.all([
     getStaff(household.id),
     getMemoryRules(household.id, true),
     getTodayBrief(household.id),
     getBriefStats(household.id, household.created_at),
+    getLatestMealPlan(household.id),
   ]);
+
+  const todaysMeals =
+    brief?.meals && Object.keys(brief.meals).length > 0
+      ? brief.meals
+      : todaysMealsFromWeeklyPlan(weeklyPlan as { week_start: string; plan: WeeklyPlan } | null, new Date());
 
   const primaryCook = staff.find((s) => s.role === "cook") || staff[0];
   const topRules = rules
@@ -120,7 +147,7 @@ export default async function DashboardPage() {
           Today&apos;s meals
         </p>
         <div className="mb-4">
-          <MealEditRow householdId={household.id} initialMeals={brief?.meals || {}} />
+          <MealEditRow householdId={household.id} initialMeals={todaysMeals || {}} />
         </div>
 
         {primaryCook ? (

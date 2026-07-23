@@ -48,7 +48,10 @@ function last10Digits(phone: string): string {
 
 export async function POST(request: Request) {
   const token = new URL(request.url).searchParams.get("token");
-  if (process.env.INTERAKT_WEBHOOK_SECRET && token !== process.env.INTERAKT_WEBHOOK_SECRET) {
+  const expected = process.env.INTERAKT_WEBHOOK_SECRET;
+  // Fail closed: if the secret isn't configured, reject every request rather than
+  // silently accepting unauthenticated ones (matches the Razorpay webhook's behavior).
+  if (!expected || token !== expected) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 

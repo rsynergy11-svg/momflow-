@@ -10,6 +10,7 @@ export async function middleware(request: NextRequest) {
   const isPublic =
     PUBLIC_PATHS.includes(path) ||
     path.startsWith("/api/razorpay/webhook") ||
+    path.startsWith("/api/interakt/webhook") ||
     path.startsWith("/_next") ||
     path.startsWith("/favicon");
 

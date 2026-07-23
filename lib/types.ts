@@ -78,6 +78,38 @@ export type MealPlan = {
   created_at: string;
 };
 
+export type GroceryItem = { name: string; quantity: string; category: string };
+
+export type GroceryList = {
+  id: string;
+  household_id: string;
+  week_start: string;
+  items: GroceryItem[];
+  estimated_cost: number | null;
+  is_ai_generated: boolean;
+  created_at: string;
+};
+
+export type CookReply = {
+  id: string;
+  household_id: string;
+  staff_id: string | null;
+  brief_id: string | null;
+  message: string;
+  added_to_memory: boolean;
+  created_at: string;
+};
+
+export type HouseholdMember = {
+  id: string;
+  household_id: string;
+  user_id: string | null;
+  invited_email: string | null;
+  role: "owner" | "member";
+  status: "invited" | "active";
+  created_at: string;
+};
+
 export type Subscription = {
   id: string;
   household_id: string;

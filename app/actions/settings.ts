@@ -97,3 +97,34 @@ export async function updateHouseholdLanguagePreference(householdId: string, sta
   if (error) throw error;
   revalidatePath("/settings");
 }
+
+// ── Household access (multi-user) ──
+export async function inviteHouseholdMember(householdId: string, email: string) {
+  const supabase = createClient();
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !normalized.includes("@")) throw new Error("Enter a valid email address.");
+
+  const { data: existing } = await supabase
+    .from("household_members")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("invited_email", normalized)
+    .maybeSingle();
+  if (existing) return; // already invited or active — nothing to do
+
+  const { error } = await supabase.from("household_members").insert({
+    household_id: householdId,
+    invited_email: normalized,
+    role: "member",
+    status: "invited",
+  });
+  if (error) throw error;
+  revalidatePath("/settings");
+}
+
+export async function removeHouseholdMember(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from("household_members").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/settings");
+}

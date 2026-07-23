@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireHousehold, getStaff, getMemoryRules, getTodayBrief, isTrialExpired } from "@/lib/data";
+import { requireHousehold, getStaff, getMemoryRules, getTodayBrief, getBriefStats, isTrialExpired } from "@/lib/data";
+import { getFestivalContext, getUpcomingFestival } from "@/lib/festivals";
 import BottomNav from "@/components/BottomNav";
 import StaffStatusCard from "@/components/StaffStatusCard";
 import MealEditRow from "@/components/MealEditRow";
@@ -13,10 +14,11 @@ function greeting() {
 
 export default async function DashboardPage() {
   const { household } = await requireHousehold();
-  const [staff, rules, brief] = await Promise.all([
+  const [staff, rules, brief, stats] = await Promise.all([
     getStaff(household.id),
     getMemoryRules(household.id, true),
     getTodayBrief(household.id),
+    getBriefStats(household.id, household.created_at),
   ]);
 
   const primaryCook = staff.find((s) => s.role === "cook") || staff[0];
@@ -36,13 +38,48 @@ export default async function DashboardPage() {
     month: "long",
   });
 
+  const todaysFestivals = getFestivalContext(new Date());
+  const upcoming = todaysFestivals.length ? null : getUpcomingFestival(3);
+  const primaryCookOnLeave = primaryCook && !primaryCook.is_present_today;
+
   return (
     <main className="min-h-screen bg-background px-5 pt-8 pb-24">
       <div className="max-w-md mx-auto">
-        <p className="text-xs text-text-secondary mb-0.5">{today}</p>
-        <h1 className="text-2xl font-semibold text-text-primary mb-5">
-          {greeting()}, {household.name.replace(/^The\s|\sHome$/gi, "") || "there"} 👋
-        </h1>
+        <div className="hero-card px-5 pt-6 pb-5 mb-4">
+          <div className="flex items-start justify-between relative">
+            <div>
+              <p className="text-xs text-white/55 mb-0.5">{today}</p>
+              <h1 className="text-[22px] font-medium text-white leading-tight">
+                {greeting()}, {household.name.replace(/^The\s|\sHome$/gi, "") || "there"} 👋
+              </h1>
+            </div>
+            {stats.streak > 0 && (
+              <div className="streak-badge">
+                <div className="text-base font-bold text-white leading-none">{stats.streak}</div>
+                <div className="text-[8px] font-bold text-white/85 uppercase tracking-wide mt-0.5">
+                  day streak
+                </div>
+              </div>
+            )}
+          </div>
+
+          {todaysFestivals.length > 0 && (
+            <div className="mt-4 bg-marigold/15 border border-marigold/35 rounded-btn px-3.5 py-2.5 text-xs text-[#F0D9B8] font-medium">
+              {todaysFestivals.map((e) => `${e.emoji} ${e.name}`).join(" · ")} today — fasting rules auto-applied to briefs and meal plans.
+            </div>
+          )}
+          {upcoming && (
+            <div className="mt-4 bg-marigold/10 border border-marigold/25 rounded-btn px-3.5 py-2.5 text-xs text-[#F0D9B8] font-medium">
+              {upcoming.event.emoji} {upcoming.event.name} in {upcoming.daysUntil} day{upcoming.daysUntil === 1 ? "" : "s"} — rules will auto-apply.
+            </div>
+          )}
+        </div>
+
+        {stats.total > 0 && (
+          <p className="text-xs text-center text-text-secondary mb-4">
+            {stats.sent}/{stats.total} days sent this month
+          </p>
+        )}
 
         {household.plan === "trial" && (
           <div
@@ -60,6 +97,20 @@ export default async function DashboardPage() {
             ) : (
               <>{daysLeft} day{daysLeft === 1 ? "" : "s"} left in your free trial</>
             )}
+          </div>
+        )}
+
+        {primaryCookOnLeave && (
+          <div className="card p-4 mb-4 border border-warning/30">
+            <p className="text-sm font-semibold text-text-primary mb-1">
+              {primaryCook!.name} is marked absent today
+            </p>
+            <p className="text-xs text-text-secondary mb-3">
+              Need a simple backup plan the family can cook themselves?
+            </p>
+            <Link href="/leave-day" className="btn-secondary w-full py-2.5 block text-center text-sm">
+              Generate backup plan
+            </Link>
           </div>
         )}
 
@@ -96,6 +147,14 @@ export default async function DashboardPage() {
             ? `Sent today at ${brief.sent_at ? new Date(brief.sent_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : ""}`
             : "Not sent yet today"}
         </p>
+
+        <Link href="/grocery" className="card p-3.5 mb-4 flex items-center gap-3">
+          <span className="text-lg">🛒</span>
+          <span className="text-sm font-medium text-text-primary flex-1">
+            This week&apos;s grocery list
+          </span>
+          <span className="text-primary text-xs font-semibold">Open →</span>
+        </Link>
 
         {topRules.length > 0 && (
           <div className="mb-4">

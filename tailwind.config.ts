@@ -19,6 +19,10 @@ const config: Config = {
         error: "#C84030",
         success: "#3A8040",
         warning: "#C89040",
+        marigold: "#E08C3A",
+        "marigold-dark": "#B96F26",
+        "hero-start": "#2A3818",
+        "hero-end": "#4C5B30",
       },
       fontFamily: {
         sans: [
@@ -36,6 +40,9 @@ const config: Config = {
       },
       boxShadow: {
         soft: "0 2px 16px rgba(0,0,0,.08)",
+      },
+      backgroundImage: {
+        hero: "linear-gradient(155deg, #2A3818, #4C5B30)",
       },
     },
   },

@@ -48,6 +48,14 @@ only in Vercel's Environment Variables screen (or your own machine), never in a 
      set `INTERAKT_API_KEY`.
    - If this isn't configured, brief sending will fail gracefully and the UI falls back
      to a "copy text" button — nothing else breaks.
+   - **Cook reply capture (optional):** point Interakt's inbound-message webhook at
+     `<your-app-url>/api/interakt/webhook?token=<INTERAKT_WEBHOOK_SECRET>` and set
+     `INTERAKT_WEBHOOK_SECRET` to a random string. When your cook replies on WhatsApp
+     (e.g. "made it without onion today"), it shows up in `/brief-preview` with a
+     one-tap "Add to memory vault" button. This hasn't been tested against a live
+     Interakt account yet — the payload parser in `app/api/interakt/webhook/route.ts`
+     is written defensively against the commonly documented shape, but check Vercel
+     logs after your first real reply in case the field names need adjusting.
 
 5. **Razorpay**
    - Create two subscription plans in the Razorpay dashboard (Settings → Subscriptions →
@@ -56,29 +64,55 @@ only in Vercel's Environment Variables screen (or your own machine), never in a 
      `RAZORPAY_ESSENTIAL_PLAN_ID`, `RAZORPAY_PREMIUM_PLAN_ID`.
    - Point a webhook at `<your-app-url>/api/razorpay/webhook` for the `subscription.*` events.
 
-6. **Run locally**
+6. **Voice-note briefs (optional)**
+   - Enable the Text-to-Speech API in a Google Cloud project, create an API key, and
+     set `GOOGLE_TTS_API_KEY`.
+   - If this isn't set, the "Generate voice note" button on `/brief-preview` shows a
+     clear error instead of breaking. Chosen for its Indian-language coverage (Hindi,
+     Marathi, Gujarati, Tamil, Bengali; Odia support may be limited — check
+     `lib/tts.ts` if that language's button errors).
+   - Sending the audio automatically as a WhatsApp voice note isn't implemented —
+     Interakt's media-message API needs an active 24-hour customer session window,
+     which is a different integration than the template-message send already built.
+     For now: generate → play/download → forward manually on WhatsApp.
+
+7. **Run locally**
    ```
    npm run dev
    ```
 
-7. **Deploy**
+8. **Deploy**
    - Push to a GitHub repo, import into Vercel, and set the same env vars there.
 
 ## Project structure
 
 - `app/onboarding` — 5-step setup wizard
-- `app/dashboard` — daily home screen
+- `app/dashboard` — daily home screen (streak, festival banner, leave-mode banner)
 - `app/meals` — today's meals + AI weekly planning
+- `app/grocery` — AI-generated grocery list from the week's meal plan
 - `app/memory` — the Memory Vault (persistent household rules)
-- `app/brief-preview` — generate, edit, and send the daily WhatsApp brief
-- `app/settings` — family, staff, subscription, notifications
+- `app/brief-preview` — generate, edit, and send the daily WhatsApp brief; voice note; cook replies
+- `app/leave-day` — simple family backup plan when the cook is marked absent
+- `app/settings` — family, staff, household access (invite), subscription, notifications
 - `app/pricing` — plans + Razorpay checkout
-- `app/actions/*` — server actions (Claude generation, WhatsApp send, CRUD)
-- `supabase/migrations/0001_init.sql` — full schema + RLS policies
+- `app/actions/*` — server actions (Claude generation, WhatsApp send, TTS, CRUD)
+- `app/api/interakt/webhook` — inbound cook WhatsApp replies
+- `lib/festivals.ts` — 2026 Hindu festival/fasting calendar, auto-applied to briefs and meal plans
+- `supabase/migrations/0001_init.sql` — core schema + RLS
+- `supabase/migrations/0002_grocery_lists.sql` — grocery lists
+- `supabase/migrations/0003_cook_replies.sql` — cook WhatsApp reply capture
+- `supabase/migrations/0004_household_members.sql` — multi-user household access
 
 ## Notes
 
 - Auth is Google-only via Supabase, no passwords.
-- Every household is isolated by Postgres RLS — a user can only ever read their own rows.
+- Every household is isolated by Postgres RLS, scoped through `household_members` — a
+  user can only ever read/write rows for households they're an active member of.
+- **Multi-user households:** the person who completes onboarding becomes the `owner`.
+  From Settings → Family access, the owner can invite anyone by email; that person gets
+  full access to the same household the next time they sign in with Google using that
+  email. Only the owner can invite or remove people; any active member (owner or
+  invited) can otherwise read/write everything in the household — there's no finer-
+  grained permission model yet (e.g. view-only access isn't supported).
 - Trial households get full access for 14 days (`households.trial_ends_at`); after that,
   the dashboard and brief-preview redirect to `/pricing`.

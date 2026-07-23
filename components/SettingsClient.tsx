@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import type { FamilyMember, Household, Staff } from "@/lib/types";
+import type { FamilyMember, Household, HouseholdMember, Staff } from "@/lib/types";
 import {
   upsertFamilyMember,
   deleteFamilyMember,
   upsertStaffMember,
   deactivateStaffMember,
+  inviteHouseholdMember,
+  removeHouseholdMember,
 } from "@/app/actions/settings";
 
 const LANGUAGES = [
@@ -30,15 +32,23 @@ export default function SettingsClient({
   household,
   initialMembers,
   initialStaff,
+  initialHouseholdMembers,
+  currentRole,
 }: {
   household: Household;
   initialMembers: FamilyMember[];
   initialStaff: Staff[];
+  initialHouseholdMembers: HouseholdMember[];
+  currentRole: "owner" | "member";
 }) {
   const [members, setMembers] = useState(initialMembers);
   const [staff, setStaff] = useState(initialStaff);
+  const [householdMembers, setHouseholdMembers] = useState(initialHouseholdMembers);
   const [showMemberForm, setShowMemberForm] = useState(false);
   const [showStaffForm, setShowStaffForm] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [notifPrefs, setNotifPrefs] = useState({ dailyReminder: true, sendConfirmation: true });
   const [, startTransition] = useTransition();
 
@@ -67,6 +77,39 @@ export default function SettingsClient({
     });
   }
 
+  async function handleInvite() {
+    setInviteError(null);
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      await inviteHouseholdMember(household.id, inviteEmail.trim());
+      setHouseholdMembers((prev) => [
+        ...prev,
+        {
+          id: `temp-${Date.now()}`,
+          household_id: household.id,
+          user_id: null,
+          invited_email: inviteEmail.trim().toLowerCase(),
+          role: "member",
+          status: "invited",
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      setInviteEmail("");
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : "Couldn't send that invite.");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  function handleRemoveHouseholdMember(id: string) {
+    setHouseholdMembers((prev) => prev.filter((m) => m.id !== id));
+    startTransition(async () => {
+      await removeHouseholdMember(id);
+    });
+  }
+
   return (
     <div className="space-y-6">
       {/* Subscription */}
@@ -87,6 +130,58 @@ export default function SettingsClient({
             {household.plan === "trial" ? "Upgrade" : "Manage"}
           </a>
         </div>
+      </section>
+
+      {/* Household access (multi-user) */}
+      <section>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-text-secondary mb-2 px-1">
+          Family access
+        </p>
+        <div className="space-y-2 mb-2">
+          {householdMembers.map((m) => (
+            <div key={m.id} className="card p-3.5 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-marigold/20 text-marigold-dark flex items-center justify-center text-xs font-bold flex-shrink-0">
+                {(m.invited_email || "?")[0].toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary truncate">{m.invited_email}</p>
+                <p className="text-xs text-text-secondary capitalize">
+                  {m.role}{m.status === "invited" ? " · invite pending" : ""}
+                </p>
+              </div>
+              {currentRole === "owner" && m.role !== "owner" && (
+                <button
+                  onClick={() => handleRemoveHouseholdMember(m.id)}
+                  className="text-error text-xs font-semibold"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {currentRole === "owner" ? (
+          <div className="card p-4">
+            <label className="block text-sm font-medium mb-1.5">Invite by email</label>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 border border-muted rounded-btn px-3 py-2 text-sm bg-surface"
+                placeholder="spouse@email.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+              <button onClick={handleInvite} disabled={inviting} className="btn-primary px-4 text-sm">
+                {inviting ? "…" : "Invite"}
+              </button>
+            </div>
+            {inviteError && <p className="text-error text-xs mt-2">{inviteError}</p>}
+            <p className="text-xs text-text-secondary mt-2">
+              They&apos;ll get full access to this household the next time they sign in with Google using this email.
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-text-secondary px-1">Only the household owner can invite or remove people.</p>
+        )}
       </section>
 
       {/* Family members */}

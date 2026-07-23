@@ -1,7 +1,8 @@
-import { requireHousehold, getStaff, getTodayBrief, getRecentBriefs } from "@/lib/data";
+import { requireHousehold, getStaff, getTodayBrief, getRecentBriefs, getPendingCookReplies } from "@/lib/data";
 import PageHeader from "@/components/PageHeader";
 import BottomNav from "@/components/BottomNav";
 import BriefPreviewClient from "@/components/BriefPreviewClient";
+import CookReplyCard from "@/components/CookReplyCard";
 import Link from "next/link";
 
 export default async function BriefPreviewPage({
@@ -13,6 +14,7 @@ export default async function BriefPreviewPage({
   const staffList = await getStaff(household.id);
   const todayBrief = await getTodayBrief(household.id);
   const history = await getRecentBriefs(household.id, 7);
+  const pendingReplies = await getPendingCookReplies(household.id);
 
   if (!staffList.length) {
     return (
@@ -36,6 +38,9 @@ export default async function BriefPreviewPage({
     <main className="min-h-screen bg-background px-5 pt-8 pb-24">
       <div className="max-w-md mx-auto">
         <PageHeader title="Today's brief" subtitle="Review, edit, and send to your cook" />
+        {pendingReplies.map((reply) => (
+          <CookReplyCard key={reply.id} reply={reply} householdId={household.id} />
+        ))}
         <BriefPreviewClient
           household={household}
           staffList={staffList}

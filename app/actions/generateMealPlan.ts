@@ -5,6 +5,7 @@ import { getClaude, CLAUDE_MODEL } from "@/lib/claude";
 import { createClient } from "@/lib/supabase/server";
 import type { FamilyMember, MemoryRule, WeeklyPlan } from "@/lib/types";
 import { saveWeeklyMealPlan } from "@/app/actions/meals";
+import { formatWeekFestivalContextForPrompt } from "@/lib/festivals";
 
 const SYSTEM_PROMPT = `You are MomFlow's meal planning engine for Indian households. You know 
 regional Indian cuisine deeply, including fasting rules (Navratri, Ekadashi, weekly fasts), 
@@ -44,7 +45,11 @@ export async function generateWeeklyMealPlan(householdId: string, specialModes: 
     ? `Special modes active this week: ${specialModes.join(", ")}.`
     : "No special modes active this week.";
 
+  const weekStart = nextMonday();
+  const festivalText = formatWeekFestivalContextForPrompt(weekStart);
+
   const userPrompt = `Plan a full week of breakfast, lunch, and dinner for this household.
+The week starts Monday ${weekStart}.
 
 Family members and their needs:
 ${membersText}
@@ -53,6 +58,10 @@ Rules to always follow:
 ${rulesText}
 
 ${modesText}
+
+Festival/fasting calendar for this specific week (auto-detected — adjust affected days'
+meals automatically, e.g. sabudana/kuttu on fasting days, no onion-garlic during Shravan):
+${festivalText}
 
 Return the JSON plan now.`;
 
@@ -73,7 +82,6 @@ Return the JSON plan now.`;
   const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "");
   const plan = JSON.parse(cleaned) as WeeklyPlan;
 
-  const weekStart = nextMonday();
   await saveWeeklyMealPlan(householdId, weekStart, plan);
 
   return { weekStart, plan };

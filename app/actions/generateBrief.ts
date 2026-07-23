@@ -4,6 +4,8 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { getClaude, CLAUDE_MODEL } from "@/lib/claude";
 import { createClient } from "@/lib/supabase/server";
 import type { FamilyMember, MealsForDay, MemoryRule, Staff } from "@/lib/types";
+import { formatFestivalContextForPrompt } from "@/lib/festivals";
+import { formatFamilyMembers, formatMemoryRules } from "@/lib/briefPrompts";
 import { revalidatePath } from "next/cache";
 
 const SYSTEM_PROMPT = `You are MomFlow's kitchen intelligence engine. You generate daily cook 
@@ -35,23 +37,6 @@ const LANGUAGE_LABEL: Record<string, string> = {
   english: "English",
 };
 
-function formatMemoryRules(rules: MemoryRule[]): string {
-  if (!rules.length) return "None specified.";
-  return rules.map((r) => `- ${r.rule_text} (applies to: ${r.applies_to})`).join("\n");
-}
-
-function formatFamilyMembers(members: FamilyMember[]): string {
-  if (!members.length) return "Not specified.";
-  return members
-    .map((m) => {
-      const bits = [m.role, m.age ? `${m.age} yrs` : null, ...(m.dietary_restrictions || [])].filter(
-        Boolean
-      );
-      return `- ${m.name}${bits.length ? ` (${bits.join(", ")})` : ""}`;
-    })
-    .join("\n");
-}
-
 function buildUserPrompt(opts: {
   staffName: string;
   language: string;
@@ -60,6 +45,7 @@ function buildUserPrompt(opts: {
   meals: MealsForDay;
   memoryRules: MemoryRule[];
   familyMembers: FamilyMember[];
+  festivalContext: string;
 }) {
   const langLabel = LANGUAGE_LABEL[opts.language] || opts.language;
   return `Generate today's cook brief for our household.
@@ -68,6 +54,9 @@ Cook's name: ${opts.staffName}
 Language: ${langLabel}
 Today's date: ${opts.date}
 Any special context today: ${opts.specialContext || "None"}
+
+Today's festival/fasting calendar (auto-detected — apply these rules automatically, don't wait to be told):
+${opts.festivalContext}
 
 Today's planned meals:
 - Breakfast: ${opts.meals.breakfast?.name || "Not set"}${opts.meals.breakfast?.notes ? ` (${opts.meals.breakfast.notes})` : ""}
@@ -80,7 +69,8 @@ ${formatMemoryRules(opts.memoryRules)}
 Family members:
 ${formatFamilyMembers(opts.familyMembers)}
 
-Generate the brief in ${langLabel}. Make it warm and natural.`;
+Generate the brief in ${langLabel}. Make it warm and natural. If today's festival/fasting calendar
+above lists anything, weave the relevant adjustment into the brief naturally — don't just append it.`;
 }
 
 export async function generateBrief(opts: {
@@ -112,6 +102,7 @@ export async function generateBrief(opts: {
 
   const meals: MealsForDay = todayBrief?.meals || {};
   const language: string = (staff as Staff).language || "hindi";
+  const festivalContext = formatFestivalContextForPrompt(new Date());
 
   const userPrompt = buildUserPrompt({
     staffName: (staff as Staff).name,
@@ -121,6 +112,7 @@ export async function generateBrief(opts: {
     meals,
     memoryRules: (rules as MemoryRule[]) || [],
     familyMembers: (members as FamilyMember[]) || [],
+    festivalContext,
   });
 
   const anthropic = getClaude();
@@ -148,6 +140,7 @@ export async function generateBrief(opts: {
       meals,
       memoryRules: (rules as MemoryRule[]) || [],
       familyMembers: (members as FamilyMember[]) || [],
+      festivalContext,
     });
     const englishMessage = await anthropic.messages.create({
       model: CLAUDE_MODEL,

@@ -44,3 +44,39 @@ body {
   font-weight: 600;
   padding: 6px 14px;
 }
+
+/* Hero header used on dashboard — dark olive gradient with a warm glow accent */
+.hero-card {
+  background: linear-gradient(155deg, #2A3818, #4C5B30);
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.hero-card::after {
+  content: "";
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(224,140,58,0.20), transparent 70%);
+  pointer-events: none;
+}
+
+.streak-badge {
+  background: #E08C3A;
+  border-radius: 14px;
+  padding: 8px 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* WhatsApp-style chat bubble used to preview the cook brief before sending */
+.chat-bubble {
+  background: #DCF3D3;
+  border-radius: 14px 14px 14px 4px;
+  padding: 12px 14px;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}

@@ -13,12 +13,13 @@ export async function POST(request: Request) {
   const planConfig = RAZORPAY_PLANS[plan];
   if (!planConfig) return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
 
-  const { data: household } = await supabase
-    .from("households")
-    .select("id")
-    .eq("owner_id", user.id)
+  const { data: membership } = await supabase
+    .from("household_members")
+    .select("household_id")
+    .eq("user_id", user.id)
+    .eq("status", "active")
     .maybeSingle();
-  if (!household) return NextResponse.json({ error: "No household found" }, { status: 400 });
+  if (!membership) return NextResponse.json({ error: "No household found" }, { status: 400 });
 
   try {
     const razorpay = getRazorpay();
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
       plan_id: planConfig.planId,
       customer_notify: 1,
       total_count: 12, // 12 monthly cycles; renews automatically
-      notes: { household_id: household.id, plan },
+      notes: { household_id: membership.household_id, plan },
     });
 
     return NextResponse.json({

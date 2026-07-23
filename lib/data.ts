@@ -1,9 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
-import type { DailyBrief, FamilyMember, Household, MemoryRule, Staff } from "@/lib/types";
+import type { CookReply, DailyBrief, FamilyMember, Household, HouseholdMember, MemoryRule, Staff } from "@/lib/types";
+import { calculateAdherence, calculateStreak } from "@/lib/streak";
 import { redirect } from "next/navigation";
 
-// Fetches the signed-in user's household, redirecting to /onboarding if none exists yet.
-export async function requireHousehold(): Promise<{ household: Household; userId: string }> {
+// Fetches the signed-in user's household via household_members (owner or invited
+// member), redirecting to /onboarding if they don't belong to one yet.
+export async function requireHousehold(): Promise<{
+  household: Household;
+  userId: string;
+  role: "owner" | "member";
+}> {
   const supabase = createClient();
   const {
     data: { user },
@@ -11,15 +17,34 @@ export async function requireHousehold(): Promise<{ household: Household; userId
 
   if (!user) redirect("/login");
 
+  const { data: membership } = await supabase
+    .from("household_members")
+    .select("household_id, role")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!membership) redirect("/onboarding");
+
   const { data: household } = await supabase
     .from("households")
     .select("*")
-    .eq("owner_id", user.id)
+    .eq("id", membership.household_id)
     .maybeSingle();
 
   if (!household) redirect("/onboarding");
 
-  return { household: household as Household, userId: user.id };
+  return { household: household as Household, userId: user.id, role: membership.role as "owner" | "member" };
+}
+
+export async function getHouseholdMembers(householdId: string): Promise<HouseholdMember[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("household_members")
+    .select("*")
+    .eq("household_id", householdId)
+    .order("created_at", { ascending: true });
+  return (data as HouseholdMember[]) || [];
 }
 
 export async function getStaff(householdId: string): Promise<Staff[]> {
@@ -90,6 +115,53 @@ export async function getLatestMealPlan(householdId: string) {
     .limit(1)
     .maybeSingle();
   return data;
+}
+
+export async function getLatestGroceryList(householdId: string) {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("grocery_lists")
+    .select("*")
+    .eq("household_id", householdId)
+    .order("week_start", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
+
+export async function getBriefStats(householdId: string, householdCreatedAt: string) {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("daily_briefs")
+    .select("date")
+    .eq("household_id", householdId)
+    .eq("sent_to_whatsapp", true)
+    .order("date", { ascending: false })
+    .limit(90);
+
+  const sentDates = (data || []).map((d) => d.date as string);
+  const streak = calculateStreak(sentDates);
+
+  const daysSinceCreated = Math.max(
+    1,
+    Math.ceil((Date.now() - new Date(householdCreatedAt).getTime()) / 86400000)
+  );
+  const windowDays = Math.min(30, daysSinceCreated);
+  const adherence = calculateAdherence(sentDates, windowDays);
+
+  return { streak, ...adherence };
+}
+
+export async function getPendingCookReplies(householdId: string): Promise<CookReply[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("cook_replies")
+    .select("*")
+    .eq("household_id", householdId)
+    .eq("added_to_memory", false)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  return (data as CookReply[]) || [];
 }
 
 export function isTrialExpired(household: Household): boolean {

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import type { DailyBrief, Staff } from "@/lib/types";
 import { generateBrief, updateBriefText } from "@/app/actions/generateBrief";
 import { sendBriefToWhatsApp } from "@/app/actions/sendWhatsApp";
+import VoiceNoteButton from "@/components/VoiceNoteButton";
 
 const LANGUAGE_LABEL: Record<string, string> = {
   hindi: "Hindi",
@@ -130,6 +131,20 @@ export default function BriefPreviewClient({
         </div>
       )}
 
+      {status && (
+        <div
+          className={`rounded-btn px-4 py-2.5 mb-3 text-sm font-medium ${
+            status.type === "success"
+              ? "bg-success/15 text-success"
+              : status.type === "error"
+              ? "bg-error/15 text-error"
+              : "bg-muted text-text-secondary"
+          }`}
+        >
+          {status.text}
+        </div>
+      )}
+
       {brief && (
         <>
           <div className="flex gap-2 mb-3">
@@ -148,6 +163,24 @@ export default function BriefPreviewClient({
           </div>
 
           <div className="card p-4 mb-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${staff?.is_present_today ? "bg-success" : "bg-error"}`}
+                />
+                <span className="text-xs font-semibold text-primary">
+                  {staff?.name} {staff?.is_present_today ? "is cooking today" : "is marked absent"}
+                </span>
+              </div>
+              <span
+                className={`chip text-[10px] ${
+                  brief.sent_to_whatsapp ? "bg-success/15 text-success" : "bg-warning/15 text-[#8A5A1E]"
+                }`}
+              >
+                {brief.sent_to_whatsapp ? "SENT" : "DRAFT"}
+              </span>
+            </div>
+
             {editing ? (
               <>
                 <textarea
@@ -167,8 +200,9 @@ export default function BriefPreviewClient({
               </>
             ) : (
               <>
-                <p className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed mb-3">
-                  {activeText}
+                <div className="chat-bubble text-sm text-text-primary mb-2">{activeText}</div>
+                <p className="text-[10px] text-text-secondary text-right mb-3">
+                  {brief.sent_to_whatsapp ? "Sent" : "Preview · not sent yet"}
                 </p>
                 <button
                   onClick={() => {
@@ -183,20 +217,6 @@ export default function BriefPreviewClient({
             )}
           </div>
 
-          {status && (
-            <div
-              className={`rounded-btn px-4 py-2.5 mb-3 text-sm font-medium ${
-                status.type === "success"
-                  ? "bg-success/15 text-success"
-                  : status.type === "error"
-                  ? "bg-error/15 text-error"
-                  : "bg-muted text-text-secondary"
-              }`}
-            >
-              {status.text}
-            </div>
-          )}
-
           <button
             onClick={handleSend}
             disabled={sending}
@@ -207,6 +227,7 @@ export default function BriefPreviewClient({
           <button onClick={handleCopy} className="btn-secondary w-full py-3 mb-2 text-sm">
             Copy text
           </button>
+          <VoiceNoteButton briefId={brief.id} />
           <button
             onClick={() => {
               setBrief(null);

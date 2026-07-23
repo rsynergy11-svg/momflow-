@@ -29,6 +29,17 @@ export async function createHousehold(name: string, city: string) {
     .single();
 
   if (error) throw error;
+
+  // The owner is always an active household_members row too — every other table's
+  // RLS now checks membership rather than owner_id directly.
+  await supabase.from("household_members").insert({
+    household_id: data.id,
+    user_id: user.id,
+    invited_email: user.email,
+    role: "owner",
+    status: "active",
+  });
+
   return data.id as string;
 }
 
